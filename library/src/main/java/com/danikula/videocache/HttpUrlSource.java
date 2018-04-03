@@ -14,6 +14,7 @@ import java.io.InterruptedIOException;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 import static com.danikula.videocache.Preconditions.checkNotNull;
 import static com.danikula.videocache.ProxyCacheUtils.DEFAULT_BUFFER_SIZE;
@@ -29,7 +30,6 @@ import static java.net.HttpURLConnection.HTTP_SEE_OTHER;
  * @author Alexey Danilov (danikula@gmail.com).
  */
 public class HttpUrlSource implements Source {
-
     private static final int MAX_REDIRECTS = 5;
     private final SourceInfoStorage sourceInfoStorage;
     private final HeaderInjector headerInjector;
@@ -81,10 +81,12 @@ public class HttpUrlSource implements Source {
     public void open(long offset) throws ProxyCacheException {
         try {
             KLog.i("======open ,offset:" + offset);
-            connection = openConnection(offset, -1);
+
+            connection = openConnection(offset,sourceInfo.length>0?sourceInfo.length-1:0, -1);
             String mime = connection.getContentType();
             inputStream = new BufferedInputStream(connection.getInputStream(), DEFAULT_BUFFER_SIZE);
-            long length = readSourceAvailableBytes(connection, offset, connection.getResponseCode());
+//            long length = readSourceAvailableBytes(connection, offset, connection.getResponseCode());
+            long length = getContentLength(connection,connection.getResponseCode());
             this.sourceInfo = new SourceInfo(sourceInfo.url, length, mime);
             this.sourceInfoStorage.put(sourceInfo.url, sourceInfo);
         } catch (IOException e) {
@@ -101,6 +103,25 @@ public class HttpUrlSource implements Source {
     private long getContentLength(HttpURLConnection connection) {
         String contentLengthValue = connection.getHeaderField("Content-Length");
         return contentLengthValue == null ? -1 : Long.parseLong(contentLengthValue);
+    }
+
+    private long getContentLength(HttpURLConnection connection,int responseCode) {
+        if(responseCode == HTTP_OK){
+            String contentLengthValue = connection.getHeaderField("Content-Length");
+            return contentLengthValue == null ? -1 : Long.parseLong(contentLengthValue);
+        }else {
+            if(responseCode == HTTP_PARTIAL){
+                String contentRange = connection.getHeaderField("Content-Range");
+                if(contentRange!=null){
+                    int index=contentRange.indexOf('/');
+                    if(index!=-1){
+                        return Long.parseLong(contentRange.substring(index+1));
+                    }
+                }
+            }
+        }
+        return sourceInfo.length;
+
     }
 
     @Override
@@ -142,8 +163,8 @@ public class HttpUrlSource implements Source {
         HttpURLConnection urlConnection = null;
         InputStream inputStream = null;
         try {
-            urlConnection = openConnection(0, 10000);
-            long length = getContentLength(urlConnection);
+            urlConnection = openConnection(0,1, 10000);
+            long length = getContentLength(urlConnection,urlConnection.getResponseCode());
             String mime = urlConnection.getContentType();
             inputStream = urlConnection.getInputStream();
             this.sourceInfo = new SourceInfo(sourceInfo.url, length, mime);
@@ -159,7 +180,7 @@ public class HttpUrlSource implements Source {
         }
     }
 
-    private HttpURLConnection openConnection(long offset, int timeout) throws IOException, ProxyCacheException {
+    private HttpURLConnection openConnection(long offset,long length, int timeout) throws IOException, ProxyCacheException {
         HttpURLConnection connection;
         boolean redirected;
         int redirectCount = 0;
@@ -168,8 +189,8 @@ public class HttpUrlSource implements Source {
             KLog.i("打开服务器文件链接 " + (offset > 0 ? " with offset " + offset : "") + " to " + url);
             connection = (HttpURLConnection) new URL(url).openConnection();
             injectCustomHeaders(connection, url);
-            if (offset > 0) {
-                connection.setRequestProperty("Range", "bytes=" + offset + "-");
+            if (offset > 0 || length>0) {
+                connection.setRequestProperty("Range", "bytes=" + offset + "-"+(length>0?length:""));
             }
             if (timeout > 0) {
                 connection.setConnectTimeout(timeout);
