@@ -13,6 +13,8 @@ public class ByteArrayCache implements Cache {
     private volatile byte[] data;
     private volatile boolean completed;
 
+    private long maxReadPosition=0;
+
     public ByteArrayCache() {
         this(new byte[0]);
     }
@@ -29,7 +31,11 @@ public class ByteArrayCache implements Cache {
         if (offset > Integer.MAX_VALUE) {
             throw new IllegalArgumentException("Too long offset for memory cache " + offset);
         }
-        return new ByteArrayInputStream(data).read(buffer, (int) offset, length);
+        int len= new ByteArrayInputStream(data).read(buffer, (int) offset, length);
+        if(len>=0){
+            maxReadPosition=Math.max(maxReadPosition,offset+len);
+        }
+        return len;
     }
 
     @Override
@@ -59,5 +65,10 @@ public class ByteArrayCache implements Cache {
     @Override
     public boolean isCompleted() {
         return completed;
+    }
+
+    @Override
+    public synchronized long getMaxReadPosition(){
+        return maxReadPosition;
     }
 }

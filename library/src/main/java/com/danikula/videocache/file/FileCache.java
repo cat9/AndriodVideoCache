@@ -21,6 +21,8 @@ public class FileCache implements Cache {
     public File file;
     private RandomAccessFile dataFile;
 
+    private long maxReadPosition=0;
+
     public FileCache(File file) throws ProxyCacheException {
         this(file, new UnlimitedDiskUsage());
     }
@@ -54,7 +56,11 @@ public class FileCache implements Cache {
     public synchronized int read(byte[] buffer, long offset, int length) throws ProxyCacheException {
         try {
             dataFile.seek(offset);
-            return dataFile.read(buffer, 0, length);
+            int len = dataFile.read(buffer, 0, length);
+            if(len>=0){
+                maxReadPosition=Math.max(maxReadPosition,offset+len);
+            }
+            return len;
         } catch (IOException e) {
             String format = "Error reading %d bytes with offset %d from file[%d bytes] to buffer[%d bytes]";
             throw new ProxyCacheException(String.format(format, length, offset, available(), buffer.length), e);
@@ -112,6 +118,11 @@ public class FileCache implements Cache {
         boolean isCompleted = !isTempFile(file);
 //        KLog.i("====文件" + (isCompleted ? "已" : "未") + "缓存完毕");
         return isCompleted;
+    }
+
+    @Override
+    public synchronized long getMaxReadPosition(){
+        return maxReadPosition;
     }
 
     /**

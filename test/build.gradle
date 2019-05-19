@@ -5,13 +5,12 @@ repositories {
 apply plugin: 'com.android.application'
 
 android {
-    compileSdkVersion 23
-    buildToolsVersion '26.0.2'
+    compileSdkVersion 28
 
     defaultConfig {
         applicationId 'com.danikula.proxycache.test'
         minSdkVersion 16
-        targetSdkVersion 23
+        targetSdkVersion 28
         versionCode 1
         versionName '0.1'
     }
@@ -58,14 +57,14 @@ tasks.withType(Test) {
 }
 
 dependencies {
-    compile project(':library')
-    testCompile 'org.slf4j:slf4j-simple:1.7.21'
-    testCompile 'junit:junit:4.12'
-    testCompile 'org.robolectric:robolectric:3.3.2'
-    testCompile 'com.squareup:fest-android:1.0.0'
-    testCompile 'com.google.guava:guava-jdk5:17.0'
-    testCompile('com.danikula:android-garden:2.1.4') {
+    implementation project(':library')
+    testImplementation 'org.slf4j:slf4j-simple:1.7.21'
+    testImplementation 'junit:junit:4.12'
+    testImplementation 'org.robolectric:robolectric:3.3.2'
+    testImplementation 'com.squareup:fest-android:1.0.0'
+    testImplementation 'com.google.guava:guava-jdk5:17.0'
+    testImplementation('com.danikula:android-garden:2.1.4') {
         exclude group: 'com.google.android'
     }
-    testCompile 'org.mockito:mockito-all:1.9.5'
+    testImplementation 'org.mockito:mockito-all:1.9.5'
 }

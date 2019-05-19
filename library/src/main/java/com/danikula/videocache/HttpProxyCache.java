@@ -25,8 +25,14 @@ class HttpProxyCache extends ProxyCache {
     private final FileCache cache;
     private CacheListener listener;
 
+    public HttpProxyCache(HttpUrlSource source, FileCache cache,Config config) {
+        super(source, cache,config);
+        this.cache = cache;
+        this.source = source;
+    }
+
     public HttpProxyCache(HttpUrlSource source, FileCache cache) {
-        super(source, cache);
+        super(source, cache,null);
         this.cache = cache;
         this.source = source;
     }
@@ -37,7 +43,8 @@ class HttpProxyCache extends ProxyCache {
 
     public void processRequest(GetRequest request, Socket socket) throws IOException, ProxyCacheException {
         KLog.i("======processRequest");
-        OutputStream out = new BufferedOutputStream(socket.getOutputStream());
+//        OutputStream out = new BufferedOutputStream(socket.getOutputStream());
+        OutputStream out = socket.getOutputStream();
         String responseHeaders = newResponseHeaders(request);
         KLog.i("=====创建文件请求头：\n" + responseHeaders);
         out.write(responseHeaders.getBytes("UTF-8"));
@@ -84,11 +91,17 @@ class HttpProxyCache extends ProxyCache {
         byte[] buffer = new byte[DEFAULT_BUFFER_SIZE];
         int readBytes;
         //循环读取大小8k，每次返回8k给播放器
-        while ((readBytes = read(buffer, offset, buffer.length)) != -1) {
-            out.write(buffer, 0, readBytes);
-            offset += readBytes;
-            KLog.i("=======返给播发器大小：" + readBytes);
+        try {
+            while ((readBytes = read(buffer, offset, buffer.length)) != -1) {
+                out.write(buffer, 0, readBytes);
+                offset += readBytes;
+                KLog.i("=======返给播发器大小：" + readBytes);
+            }
+        } catch (Throwable e) {
+            e.printStackTrace();
+            throw e;
         }
+
         KLog.i("======循环读取结束，进行flush");
         out.flush();
     }

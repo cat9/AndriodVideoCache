@@ -18,4 +18,6 @@ public interface Cache {
     void complete() throws ProxyCacheException;
 
     boolean isCompleted();
+
+    long getMaxReadPosition();
 }

@@ -399,12 +399,36 @@ public class HttpProxyCacheServer {
         private SourceInfoStorage sourceInfoStorage;
         private HeaderInjector headerInjector;
 
+        private long normalDownloadRate;
+        private long bigFileSize;
+        private long bigFileDownloadMinSecond;
+
         public Builder(Context context) {
             this.sourceInfoStorage = SourceInfoStorageFactory.newSourceInfoStorage(context);
             this.cacheRoot = StorageUtils.getIndividualCacheDirectory(context);
             this.diskUsage = new TotalSizeLruDiskUsage(DEFAULT_MAX_SIZE);
             this.fileNameGenerator = new Md5FileNameGenerator();
             this.headerInjector = new EmptyHeadersInjector();
+        }
+
+        /**
+         * @param normalDownloadRate byte per second
+         * @return
+         */
+        public Builder normalDownloadRate(long normalDownloadRate) {
+            this.normalDownloadRate = normalDownloadRate;
+            return this;
+        }
+
+        /**
+         * 如果下载文件大小大于这个值，则为大文件。大文件可以配置一个最小的下载时间
+         * @param bigFileSize
+         * @return
+         */
+        public Builder bigFileSize(long bigFileSize,long bigFileDownloadMinSecond) {
+            this.bigFileSize = bigFileSize;
+            this.bigFileDownloadMinSecond = bigFileDownloadMinSecond;
+            return this;
         }
 
         /**
@@ -497,7 +521,7 @@ public class HttpProxyCacheServer {
         }
 
         private Config buildConfig() {
-            return new Config(cacheRoot, fileNameGenerator, diskUsage, sourceInfoStorage, headerInjector);
+            return new Config(cacheRoot, fileNameGenerator, diskUsage, sourceInfoStorage, headerInjector,normalDownloadRate,bigFileSize,bigFileDownloadMinSecond);
         }
 
     }

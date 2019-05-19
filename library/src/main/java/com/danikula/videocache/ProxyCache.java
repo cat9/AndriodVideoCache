@@ -1,5 +1,7 @@
 package com.danikula.videocache;
 
+import android.text.TextUtils;
+
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.danikula.videocache.Preconditions.checkNotNull;
@@ -20,16 +22,19 @@ class ProxyCache {
     private final Source source;
     private final Cache fileCache;
     private final Object wc = new Object();
+    private final Object rc = new Object();
     private final Object stopLock = new Object();
     private final AtomicInteger readSourceErrorsCount;
     private volatile Thread sourceReaderThread;
     private volatile boolean stopped;
     private volatile int percentsAvailable = -1;
+    private final Config config;
 
-    public ProxyCache(Source source, Cache cache) {
+    public ProxyCache(Source source, Cache cache,Config config) {
         this.source = checkNotNull(source);
         this.fileCache = checkNotNull(cache);
         this.readSourceErrorsCount = new AtomicInteger();
+        this.config=config;
     }
 
     public int read(byte[] buffer, long offset, int length) throws ProxyCacheException {
@@ -81,9 +86,13 @@ class ProxyCache {
     private synchronized void readSourceAsync() throws ProxyCacheException {
         boolean readingInProgress = sourceReaderThread != null && sourceReaderThread.getState() != Thread.State.TERMINATED;
         KLog.i("=====readSourceAsync，readingInProgress：" + readingInProgress);
-        if (!stopped && !fileCache.isCompleted() && !readingInProgress) {
-            sourceReaderThread = new Thread(new SourceReaderRunnable(), "Source reader for " + source);
-            sourceReaderThread.start();
+        if (!stopped && !fileCache.isCompleted()) {
+            if(!readingInProgress){
+                sourceReaderThread = new Thread(new SourceReaderRunnable(), "Source reader for " + source);
+                sourceReaderThread.start();
+            }else{
+                notifyNeedReadSourceData();
+            }
         }
     }
 
@@ -118,6 +127,25 @@ class ProxyCache {
         }
     }
 
+    private void notifyNeedReadSourceData() {
+        synchronized (rc) {
+            KLog.i("===notifyNeedReadSourceData");
+            rc.notifyAll();
+        }
+    }
+
+    private void waitForCacheConsumed() throws ProxyCacheException {
+        //等待原始数据，1000秒超时
+        synchronized (rc) {
+            KLog.i("===waitForCacheConsumed");
+            try {
+                rc.wait();
+            } catch (InterruptedException e) {
+                throw new ProxyCacheException("Waiting cache consumed is interrupted!", e);
+            }
+        }
+    }
+
     protected void onCacheAvailable(long cacheAvailable, long sourceLength) {
         boolean zeroLengthSource = sourceLength == 0;
         int percents = zeroLengthSource ? 100 : (int) ((float) cacheAvailable / sourceLength * 100);
@@ -136,10 +164,31 @@ class ProxyCache {
         KLog.i("=====从原始网络地址读取文件");
         long sourceAvailable = -1;
         long offset = 0;
+        long minWaitLimit=500 *1024;
+        long totalBytesRead=0;
+        long maxRate=100*1024;
+        if(config!=null && config.normalDownloadRate>0){
+            maxRate=config.normalDownloadRate;
+        }
         try {
             offset = fileCache.available();
             source.open(offset);
             sourceAvailable = source.length();
+
+            long bifFileSize=6*1024*1024;
+            long bigFileMinDownloadSecond=120;
+            if(config!=null && config.bigFileSize>0 && config.bigFileDownloadMinSecond>0){
+                bifFileSize=config.bigFileSize;
+                bigFileMinDownloadSecond=config.bigFileDownloadMinSecond;
+            }
+            if(sourceAvailable>bifFileSize){
+                long wantRate=sourceAvailable/bigFileMinDownloadSecond;
+                if(wantRate>maxRate){
+                    maxRate=wantRate;
+                }
+            }
+            long timeStart=System.currentTimeMillis();
+
             byte[] buffer = new byte[ProxyCacheUtils.DEFAULT_BUFFER_SIZE];
             int readBytes;
             while ((readBytes = source.read(buffer)) != -1) {
@@ -151,8 +200,30 @@ class ProxyCache {
                     fileCache.append(buffer, readBytes);
                 }
                 offset += readBytes;
+                totalBytesRead += readBytes;
                 KLog.i("=====文件正在下载，已下载：" + offset);
                 notifyNewCacheDataAvailable(offset, sourceAvailable);
+
+                long timeCurrent=System.currentTimeMillis();
+                long timeDiff=timeCurrent-timeStart;
+                if(timeDiff>0){
+                    long rate = totalBytesRead*1000/timeDiff;//byte每秒
+                    if(rate>maxRate){
+                        long sleep=(totalBytesRead*1000/maxRate-timeDiff);
+                        if(sleep>60){
+                            KLog.i("======文件下载sleep:"+sleep+",rate:"+rate+",maxRate:"+maxRate);
+                            Thread.sleep(sleep);
+                        }
+                    }
+                }
+
+                long maxReadPosition=fileCache.getMaxReadPosition();
+                long diff=offset - maxReadPosition;
+                KLog.i("=====maxReadPosition:" + maxReadPosition+",offset:"+offset+",sourceAvailable:"+sourceAvailable+",diff:"+diff+",minWaitLimit:"+minWaitLimit);
+                if((sourceAvailable-offset)>minWaitLimit){
+                    //超时才会进来
+                    waitForCacheConsumed();
+                }
             }
             KLog.i("======文件下载结束");
             tryComplete();

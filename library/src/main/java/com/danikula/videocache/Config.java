@@ -19,13 +19,20 @@ class Config {
     public final DiskUsage diskUsage;
     public final SourceInfoStorage sourceInfoStorage;
     public final HeaderInjector headerInjector;
+    public final long normalDownloadRate;
+    public final long bigFileSize;
+    public final long bigFileDownloadMinSecond;
 
-    Config(File cacheRoot, FileNameGenerator fileNameGenerator, DiskUsage diskUsage, SourceInfoStorage sourceInfoStorage, HeaderInjector headerInjector) {
+    Config(File cacheRoot, FileNameGenerator fileNameGenerator, DiskUsage diskUsage, SourceInfoStorage sourceInfoStorage,
+           HeaderInjector headerInjector,long normalDownloadRate,long bigFileSize,long bigFileDownloadMinSecond) {
         this.cacheRoot = cacheRoot;
         this.fileNameGenerator = fileNameGenerator;
         this.diskUsage = diskUsage;
         this.sourceInfoStorage = sourceInfoStorage;
         this.headerInjector = headerInjector;
+        this.normalDownloadRate=normalDownloadRate;
+        this.bigFileSize=bigFileSize;
+        this.bigFileDownloadMinSecond=bigFileDownloadMinSecond;
     }
 
     File generateCacheFile(String url) {

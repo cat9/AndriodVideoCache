@@ -88,7 +88,7 @@ final class HttpProxyCacheServerClients {
         KLog.i("======newHttpProxyCache");
         HttpUrlSource source = new HttpUrlSource(url, config.sourceInfoStorage, config.headerInjector);
         FileCache cache = new FileCache(config.generateCacheFile(url), config.diskUsage);
-        HttpProxyCache httpProxyCache = new HttpProxyCache(source, cache);
+        HttpProxyCache httpProxyCache = new HttpProxyCache(source, cache,config);
         httpProxyCache.registerCacheListener(uiCacheListener);
         return httpProxyCache;
     }
